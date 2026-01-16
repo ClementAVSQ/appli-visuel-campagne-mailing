@@ -1,0 +1,7 @@
+# Electron .gitignore
+/node_modules
+/dist
+/out
+/.vscode
+/.idea
+/.cache
