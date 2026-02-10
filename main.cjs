@@ -14,6 +14,18 @@ const dataRoot = isDev ? path.join(__dirname, "back") : app.getPath("userData");
 
 let mainWindow;
 
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("csv:upload", async (_event, payload) => {
     try {

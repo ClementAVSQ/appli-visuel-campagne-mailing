@@ -73,33 +73,66 @@ function getLinkData({ dataRoot, idCampaign }) {
 
   return new Promise((resolve, reject) => {
     const results = {};
+    let headersCache = [];
+    let linkHeaders = [];
+    let linkColumns = [];
+
+    const urlRegex = /(https?:\/\/[^\s;]+|mailto:[^\s;]+)/i;
 
     fs.createReadStream(filePath)
       .pipe(csv({ separator: ";" }))
       .on("headers", (headers) => {
-        const links = headers.filter(
+        headersCache = headers || [];
+        linkHeaders = headersCache.filter(
           (h) =>
             h.startsWith("http://") ||
             h.startsWith("https://") ||
             h.startsWith("mailto:")
         );
-        links.forEach((link) => {
+        linkColumns = headersCache.filter((h) =>
+          /link|lien|url/i.test(String(h))
+        );
+        linkHeaders.forEach((link) => {
           results[link] = [];
         });
       })
       .on("data", (row) => {
-        Object.keys(results).forEach((link) => {
-          const value = row[link] && String(row[link]).trim();
-          if (value) {
-            const emailKey = Object.keys(row).find((key) =>
-              key.trim().toLowerCase().includes("mail")
-            );
-            if (emailKey) {
-              const email = row[emailKey] && String(row[emailKey]).trim();
-              if (email && email.includes("@")) {
-                results[link].push(email);
-              }
+        const emailKey = Object.keys(row).find((key) =>
+          key.trim().toLowerCase().includes("mail")
+        );
+        const email = emailKey && String(row[emailKey] || "").trim();
+        if (!email || !email.includes("@")) {
+          return;
+        }
+
+        if (linkHeaders.length > 0) {
+          linkHeaders.forEach((link) => {
+            const value = row[link] && String(row[link]).trim();
+            if (value) {
+              results[link].push(email);
             }
+          });
+          return;
+        }
+
+        if (linkColumns.length > 0) {
+          linkColumns.forEach((col) => {
+            const raw = row[col] && String(row[col]).trim();
+            if (raw && urlRegex.test(raw)) {
+              if (!results[raw]) results[raw] = [];
+              results[raw].push(email);
+            }
+          });
+          return;
+        }
+
+        const values = Object.values(row).map((v) => String(v || "").trim());
+        values.forEach((value) => {
+          const match = value.match(urlRegex);
+          if (match && match[0]) {
+            const link = match[0];
+            if (!results[link]) results[link] = [];
+            results[link].push(email);
           }
         });
       })
@@ -110,6 +143,7 @@ function getLinkData({ dataRoot, idCampaign }) {
         }));
         resolve({ success: true, data: responseData });
       })
+      .on("error", (err) => reject(err));
   });
 }
 
